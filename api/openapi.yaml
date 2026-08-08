@@ -1,0 +1,164 @@
+openapi: 3.0.3
+info:
+  title: Bank Credit Card Learning API
+  version: 1.0.0
+  description: Simple REST API for bank customer, account, payment, and card domain operations.
+servers:
+  - url: http://localhost:8081
+    description: Customer service
+  - url: http://localhost:8082
+    description: Account service
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+  /customers:
+    get:
+      summary: List customers
+      responses:
+        '200':
+          description: Customer list
+    post:
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateRequest'
+      responses:
+        '201':
+          description: Customer created
+        '409':
+          description: Email or SSN already belongs to another customer
+  /customers/{customerId}:
+    get:
+      summary: Get customer by ID
+      parameters:
+        - in: path
+          name: customerId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Customer by ID
+    put:
+      summary: Update customer by ID
+      parameters:
+        - in: path
+          name: customerId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateRequest'
+      responses:
+        '200':
+          description: Customer updated
+        '409':
+          description: Email or SSN already belongs to another customer
+  /accounts:
+    get:
+      summary: List accounts
+      responses:
+        '200':
+          description: Account list
+  /accounts/{accountId}:
+    get:
+      summary: Get account by ID
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Account by ID
+  /accounts/{accountId}/transactions:
+    get:
+      summary: List account transactions
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Transaction list
+  /payments:
+    post:
+      summary: Create a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+      responses:
+        '201':
+          description: Payment created
+        '400':
+          description: Invalid payment amount, method, or account reference
+        '404':
+          description: Account not found
+components:
+  schemas:
+    CustomerCreateRequest:
+      type: object
+      required: [first_name, last_name, email, phone, ssn]
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        ssn:
+          type: string
+        customer_status:
+          type: string
+          default: active
+    CustomerUpdateRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        ssn:
+          type: string
+        customer_status:
+          type: string
+    PaymentCreateRequest:
+      type: object
+      required: [account_id, payment_amount, payment_method]
+      properties:
+        account_id:
+          type: integer
+          minimum: 1
+        payment_amount:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+          multipleOf: 0.01
+        payment_method:
+          type: string
+          enum: ['Bank Transfer', 'Credit Transfer', 'Debit Card', 'Check', 'Online']
