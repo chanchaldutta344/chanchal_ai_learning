@@ -137,11 +137,15 @@ WHERE account_id = $1
 
 POST /payments
 
-- Request body expects an account id, payment amount, and payment method.
-- SQL insert performs:
+- Request body expects an account id, a positive payment amount with at most two
+  decimal places, and a supported payment method. The referenced account must
+  already exist.
+- `payments.payment_id` has no sequence in the DDL, so the key and its derived
+  reference number are generated inside the insert statement itself:
 
 ```sql
 INSERT INTO payments (
+  payment_id,
   account_id,
   payment_amount,
   payment_date,
@@ -149,7 +153,10 @@ INSERT INTO payments (
   payment_status,
   reference_number,
   received_date
-) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, 'completed', 'PAY-' || nextval('payments_payment_id_seq'), CURRENT_TIMESTAMP)
+)
+SELECT next_id, $1, $2, CURRENT_TIMESTAMP, $3, 'completed', 'PAY-' || next_id, CURRENT_TIMESTAMP
+FROM (SELECT COALESCE(MAX(payment_id), 0) + 1 AS next_id FROM payments) AS candidate
+RETURNING payment_id
 ```
 
 - Response: 201 Created with a status payload.
@@ -174,36 +181,40 @@ type Customer struct {
 
 ```go
 type Account struct {
-    AccountID         int     `json:"account_id"`
-    CustomerID        int     `json:"customer_id"`
-    CardID            int     `json:"card_id"`
-    CreditLimit       float64 `json:"credit_limit"`
-    AvailableCredit   float64 `json:"available_credit"`
-    CurrentBalance    float64 `json:"current_balance"`
-    MinimumPayment    float64 `json:"minimum_payment"`
-    StatementCloseDay int     `json:"statement_close_day"`
-    PaymentDueDay     int     `json:"payment_due_day"`
-    AccountStatus     string  `json:"account_status"`
-    OpenedDate        string  `json:"opened_date"`
+    AccountID         int          `json:"account_id"`
+    CustomerID        int          `json:"customer_id"`
+    CardID            int          `json:"card_id"`
+    CreditLimit       money.Amount `json:"credit_limit"`
+    AvailableCredit   money.Amount `json:"available_credit"`
+    CurrentBalance    money.Amount `json:"current_balance"`
+    MinimumPayment    money.Amount `json:"minimum_payment"`
+    StatementCloseDay int          `json:"statement_close_day"`
+    PaymentDueDay     int          `json:"payment_due_day"`
+    AccountStatus     string       `json:"account_status"`
+    OpenedDate        string       `json:"opened_date"`
 }
 ```
+
+Monetary fields use `money.Amount` (an alias for `shopspring/decimal.Decimal`)
+so the `DECIMAL(12, 2)` columns round-trip exactly instead of through binary
+floating point. They are still encoded as JSON numbers.
 
 ### Transaction
 
 ```go
 type Transaction struct {
-    TransactionID     int     `json:"transaction_id"`
-    AccountID         int     `json:"account_id"`
-    CardID            int     `json:"card_id"`
-    MerchantName      string  `json:"merchant_name"`
-    MerchantCategory  string  `json:"merchant_category"`
-    TransactionAmount float64 `json:"transaction_amount"`
-    TransactionDate   string  `json:"transaction_date"`
-    PostingDate       string  `json:"posting_date"`
-    TransactionType   string  `json:"transaction_type"`
-    Description       string  `json:"description"`
-    ReferenceNumber   string  `json:"reference_number"`
-    TransactionStatus string  `json:"transaction_status"`
+    TransactionID     int          `json:"transaction_id"`
+    AccountID         int          `json:"account_id"`
+    CardID            int          `json:"card_id"`
+    MerchantName      string       `json:"merchant_name"`
+    MerchantCategory  string       `json:"merchant_category"`
+    TransactionAmount money.Amount `json:"transaction_amount"`
+    TransactionDate   string       `json:"transaction_date"`
+    PostingDate       string       `json:"posting_date"`
+    TransactionType   string       `json:"transaction_type"`
+    Description       string       `json:"description"`
+    ReferenceNumber   string       `json:"reference_number"`
+    TransactionStatus string       `json:"transaction_status"`
 }
 ```
 
@@ -217,13 +228,14 @@ Both services call a local `initDB()` function that reads environment variables 
 - `PGPASSWORD`
 - `PGDATABASE`
 
-The default values align with the SQL connection settings file:
+Host, port, user, and database name fall back to the values in the SQL
+connection settings file. `PGPASSWORD` has no default: `InitDB` returns an error
+when it is unset so a deployment can never fall back to a well-known password.
 
 ```text
 PGHOST=localhost
 PGPORT=5432
 PGUSER=appuser
-PGPASSWORD=appuser123
 PGDATABASE=appdb
 ```
 
@@ -240,7 +252,9 @@ The services map DB and HTTP errors to HTTP status codes:
 - 400 Bad Request for malformed input and bad ID parameters.
 - 404 Not Found for missing customer/account rows.
 - 405 Method Not Allowed for unsupported HTTP verbs.
-- 500 Internal Server Error for DB failures.
+- 500 Internal Server Error for DB failures. The driver message is logged
+  server-side only; the response body is a generic `internal server error` so
+  schema, constraint, and row details never reach the client.
 
 ## 6. Testability
 

@@ -34,7 +34,7 @@ go mod tidy
 - Password: appuser123
 - Database: appdb
 
-Those defaults are read at runtime from environment variables:
+Those values are read at runtime from environment variables:
 
 - PGHOST
 - PGPORT
@@ -42,7 +42,9 @@ Those defaults are read at runtime from environment variables:
 - PGPASSWORD
 - PGDATABASE
 
-If you want to override them, export them before starting each service. For example:
+Every variable except PGPASSWORD has a local default. PGPASSWORD is required:
+the services refuse to start when it is unset rather than falling back to a
+well-known password. Export the values before starting each service:
 
 ```bash
 export PGHOST=localhost

@@ -2,6 +2,7 @@ package db
 
 import (
     "database/sql"
+    "errors"
     "fmt"
     "os"
 
@@ -24,9 +25,11 @@ func InitDB() (*sql.DB, error) {
     if user == "" {
         user = "appuser"
     }
+    // The password has no default: a deployment that forgets to set PGPASSWORD
+    // must fail loudly instead of silently using a well-known credential.
     password := os.Getenv("PGPASSWORD")
     if password == "" {
-        password = "appuser123"
+        return nil, errors.New("PGPASSWORD is not set; export the database password before starting the service")
     }
     dbname := os.Getenv("PGDATABASE")
     if dbname == "" {

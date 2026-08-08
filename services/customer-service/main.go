@@ -11,6 +11,7 @@ import (
     "strings"
 
     "bankcard-learning/internal/db"
+    "bankcard-learning/internal/httpx"
 )
 
 // Customer models the customer-facing identity entity used by the customer
@@ -108,7 +109,7 @@ func main() {
 func listCustomers(w http.ResponseWriter, db *sql.DB) {
     rows, err := db.Query("SELECT customer_id, first_name, last_name, email, phone, ssn, customer_status FROM customers")
     if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        httpx.WriteServerError(w, "list customers", err)
         return
     }
     defer rows.Close()
@@ -117,10 +118,14 @@ func listCustomers(w http.ResponseWriter, db *sql.DB) {
     for rows.Next() {
         var c Customer
         if err := rows.Scan(&c.CustomerID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.SSN, &c.Status); err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
+            httpx.WriteServerError(w, "scan customer row", err)
             return
         }
         customers = append(customers, c)
+    }
+    if err := rows.Err(); err != nil {
+        httpx.WriteServerError(w, "iterate customers", err)
+        return
     }
 
     w.Header().Set("Content-Type", "application/json")
@@ -138,7 +143,7 @@ func getCustomer(w http.ResponseWriter, db *sql.DB, customerID int) {
         return
     }
     if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        httpx.WriteServerError(w, "get customer", err)
         return
     }
 
@@ -155,18 +160,13 @@ func createCustomer(w http.ResponseWriter, r *http.Request, db *sql.DB) {
         return
     }
 
-    var nextID int
-    err := db.QueryRow("SELECT COALESCE(MAX(customer_id), 0) + 1 FROM customers").Scan(&nextID)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-
-    c.CustomerID = nextID
-
+    // customers.customer_id has no sequence in the DDL, so the key is derived
+    // inside the INSERT itself. A separate SELECT MAX followed by an INSERT lets
+    // two concurrent creates pick the same key and fail on customers_pkey.
     row := db.QueryRow(
-        "INSERT INTO customers (customer_id, first_name, last_name, email, phone, ssn, customer_status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING customer_id",
-        c.CustomerID,
+        `INSERT INTO customers (customer_id, first_name, last_name, email, phone, ssn, customer_status)
+         SELECT COALESCE(MAX(customer_id), 0) + 1, $1, $2, $3, $4, $5, $6 FROM customers
+         RETURNING customer_id`,
         c.FirstName,
         c.LastName,
         c.Email,
@@ -176,7 +176,11 @@ func createCustomer(w http.ResponseWriter, r *http.Request, db *sql.DB) {
     )
 
     if err := row.Scan(&c.CustomerID); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        if httpx.IsUniqueViolation(err) {
+            http.Error(w, "a customer with the same unique identity already exists", http.StatusConflict)
+            return
+        }
+        httpx.WriteServerError(w, "create customer", err)
         return
     }
 
@@ -212,13 +216,17 @@ func updateCustomer(w http.ResponseWriter, r *http.Request, db *sql.DB, customer
         update.CustomerID,
     )
     if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        if httpx.IsUniqueViolation(err) {
+            http.Error(w, "a customer with the same unique identity already exists", http.StatusConflict)
+            return
+        }
+        httpx.WriteServerError(w, "update customer", err)
         return
     }
 
     rowsAffected, err := result.RowsAffected()
     if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        httpx.WriteServerError(w, "read update result", err)
         return
     }
     if rowsAffected == 0 {

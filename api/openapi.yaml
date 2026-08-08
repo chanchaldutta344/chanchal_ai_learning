@@ -32,6 +32,8 @@ paths:
       responses:
         '201':
           description: Customer created
+        '409':
+          description: Email or SSN already belongs to another customer
   /customers/{customerId}:
     get:
       summary: Get customer by ID
@@ -61,6 +63,8 @@ paths:
       responses:
         '200':
           description: Customer updated
+        '409':
+          description: Email or SSN already belongs to another customer
   /accounts:
     get:
       summary: List accounts
@@ -103,6 +107,10 @@ paths:
       responses:
         '201':
           description: Payment created
+        '400':
+          description: Invalid payment amount, method, or account reference
+        '404':
+          description: Account not found
 components:
   schemas:
     CustomerCreateRequest:
@@ -144,7 +152,13 @@ components:
       properties:
         account_id:
           type: integer
+          minimum: 1
         payment_amount:
           type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+          multipleOf: 0.01
         payment_method:
           type: string
+          enum: ['Bank Transfer', 'Credit Transfer', 'Debit Card', 'Check', 'Online']
