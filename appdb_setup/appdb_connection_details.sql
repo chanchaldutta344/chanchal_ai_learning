@@ -1,0 +1,5 @@
+PGHOST=localhost
+PGPORT=5432
+PGUSER=appuser
+PGPASSWORD=appuser123
+PGDATABASE=appdb
