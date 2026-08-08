@@ -75,7 +75,7 @@ VALUES
 INSERT INTO fraud_alerts (alert_id, card_id, account_id, alert_type, alert_description, alert_date, alert_status, resolution_notes, resolved_date)
 VALUES
 (1, 1, 1, 'Unusual Activity', 'Multiple transactions in different locations within 1 hour', '2026-08-05 15:30:00', 'resolved', 'Verified legitimate transactions - customer traveling', '2026-08-05 16:00:00'),
-(2, 3, 3, 'Large Transaction', 'Transaction amount exceeds typical spending pattern', '2026-08-04 18:45:00', 'resolved', 'Confirmed airline purchase by customer', '2026-08-04 19:30:00');
+(2, 4, 4, 'Large Transaction', 'Transaction amount exceeds typical spending pattern', '2026-08-05 09:15:00', 'resolved', 'Confirmed airline purchase by customer', '2026-08-05 10:30:00');
 
 -- ============================================
 -- INSERT INTO REWARDS_POINTS (4 records)
